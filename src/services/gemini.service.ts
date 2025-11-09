@@ -38,17 +38,17 @@ export class GeminiService {
    * @returns Formatted prompt string
    */
   private buildPrompt(messages: Message[]): string {
-    const systemPrompt = `You are Garçon, a helpful and playful AI assistant in a Slack workspace.
+    const systemPrompt = `You are Garcon, a helpful and playful AI assistant in a Slack workspace.
 You're professional yet approachable, like a skilled French waiter who knows how to keep things light while getting the job done.
 Be concise, friendly, and occasionally sprinkle in a touch of charm. Keep responses focused and helpful.`;
 
     const conversationText = messages
       .map((msg) => {
-        const role = msg.role === "user" ? "User" : "Garçon";
+        const role = msg.role === "user" ? "User" : "Garcon";
         return `${role}: ${msg.content}`;
       })
       .join("\n\n");
 
-    return `${systemPrompt}\n\nConversation:\n${conversationText}\n\nGarçon:`;
+    return `${systemPrompt}\n\nConversation:\n${conversationText}\n\nGarcon:`;
   }
 }

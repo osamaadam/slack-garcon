@@ -81,7 +81,7 @@ export class GarconBot {
   async start(port: number): Promise<void> {
     await this.slackService.initialize();
     await this.app.start(port);
-    console.log(`⚡️ Garçon is ready to serve on port ${port}!`);
+    console.log(`⚡️ Garcon is ready to serve on port ${port}!`);
   }
 
   /**
@@ -89,6 +89,6 @@ export class GarconBot {
    */
   async stop(): Promise<void> {
     await this.app.stop();
-    console.log("👋 Garçon has left the building");
+    console.log("👋 Garcon has left the building");
   }
 }

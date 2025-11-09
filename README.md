@@ -1,6 +1,6 @@
-# Garçon 🎩
+# Garcon 🎩
 
-A delightful TypeScript Slack bot powered by Google's Gemini AI. Just mention @garçon in any channel or thread, and watch as this charming digital waiter serves up intelligent responses with professional flair.
+A delightful TypeScript Slack bot powered by Google's Gemini AI. Just mention @Garcon in any channel or thread, and watch as this charming digital waiter serves up intelligent responses with professional flair.
 
 ## Features
 

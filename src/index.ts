@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
   } catch (error) {
-    console.error("Failed to start Garçon:", error);
+    console.error("Failed to start Garcon:", error);
     process.exit(1);
   }
 }
