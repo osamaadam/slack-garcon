@@ -1,8 +1,15 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+export interface ImageData {
+  url: string;
+  mimeType: string;
+}
+
 export interface Message {
   role: "user" | "model";
   content: string;
+  userName?: string;
+  images?: ImageData[];
 }
 
 /**
@@ -11,10 +18,12 @@ export interface Message {
 export class GeminiService {
   private genAI: GoogleGenerativeAI;
   private model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>;
+  private botToken: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, slackBotToken: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-pro" });
+    this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-pro	" });
+    this.botToken = slackBotToken;
   }
 
   /**
@@ -23,13 +32,173 @@ export class GeminiService {
    * @returns Promise resolving to the AI-generated response
    */
   async generateResponse(messages: Message[]): Promise<string> {
+    const hasImages = messages.some(
+      (msg) => msg.images && msg.images.length > 0
+    );
+
+    if (hasImages) {
+      return this.generateResponseWithImages(messages);
+    }
+
     const prompt = this.buildPrompt(messages);
 
+    console.log("🔮 Gemini Prompt:");
+    console.log("─".repeat(80));
+    console.log(prompt.substring(0, 500) + (prompt.length > 500 ? "..." : ""));
+    console.log("─".repeat(80));
+
     const result = await this.model.generateContent(prompt);
-    const response = await result.response;
+    const response = result.response;
     const text = response.text();
 
+    console.log("🎯 Gemini Response Preview:");
+    console.log("─".repeat(80));
+    console.log(text.substring(0, 300) + (text.length > 300 ? "..." : ""));
+    console.log("─".repeat(80));
+
     return text;
+  }
+
+  /**
+   * Generates a response when images are present in the conversation
+   * @param messages - Array of messages with potential images
+   * @returns Promise resolving to the AI-generated response
+   */
+  private async generateResponseWithImages(
+    messages: Message[]
+  ): Promise<string> {
+    const systemPrompt = this.buildSystemPrompt();
+    const parts: Array<
+      { text: string } | { inlineData: { data: string; mimeType: string } }
+    > = [];
+
+    parts.push({ text: systemPrompt });
+    parts.push({ text: "\nConversation:\n" });
+
+    for (const msg of messages) {
+      const role = msg.role === "user" ? msg.userName || "User" : "Garçon";
+      parts.push({ text: `${role}: ${msg.content}\n` });
+
+      if (msg.images && msg.images.length > 0) {
+        console.log(`📸 Processing ${msg.images.length} image(s) from ${role}`);
+
+        for (const image of msg.images) {
+          try {
+            const imageData = await this.fetchImageAsBase64(image.url);
+            parts.push({
+              inlineData: {
+                data: imageData,
+                mimeType: image.mimeType,
+              },
+            });
+            console.log(`  ✓ Image loaded: ${image.url.substring(0, 50)}...`);
+          } catch (error) {
+            console.error(`  ✗ Failed to load image: ${error}`);
+          }
+        }
+      }
+    }
+
+    parts.push({ text: "\nGarçon:" });
+
+    console.log("🔮 Gemini Prompt with images:");
+    console.log("─".repeat(80));
+    console.log(`Text parts: ${parts.filter((p) => "text" in p).length}`);
+    console.log(
+      `Image parts: ${parts.filter((p) => "inlineData" in p).length}`
+    );
+    console.log("─".repeat(80));
+
+    const result = await this.model.generateContent(parts);
+    const response = result.response;
+    const text = response.text();
+
+    console.log("🎯 Gemini Response Preview:");
+    console.log("─".repeat(80));
+    console.log(text.substring(0, 300) + (text.length > 300 ? "..." : ""));
+    console.log("─".repeat(80));
+
+    return text;
+  }
+
+  /**
+   * Fetches an image from Slack and converts it to base64
+   * @param url - Slack image URL
+   * @returns Base64 encoded image data
+   */
+  private async fetchImageAsBase64(url: string): Promise<string> {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.botToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return buffer.toString("base64");
+  }
+
+  /**
+   * Builds a structured prompt from message history
+   * @param messages - Array of messages to format
+   * @returns Formatted prompt string
+   */
+  private buildSystemPrompt(): string {
+    return `You are Garçon, a helpful and playful AI assistant in a Slack workspace.
+You're professional yet approachable, like a skilled French waiter who knows how to keep things light while getting the job done.
+Be concise, friendly, and occasionally sprinkle in a touch of charm. Keep responses focused and helpful.
+
+## Language Selection
+- If the orders contain Arabic or Franko (Arabizi), respond in Arabic
+- If all orders are in English only, respond in English
+
+## Formatting Rules
+Use Slack's formatting syntax (mrkdwn):
+- *bold* for emphasis
+- Use bullet points (•) for lists
+- Use emojis for visual separation
+- Keep it clean and scannable
+
+## Order Aggregation Mode
+When aggregating food orders, format as organized bullet lists:
+
+*📋 Orders by User:*
+• *User Name:*
+  • Item (Quantity) - Notes if any
+  • Item (Quantity) - Notes if any
+
+*📊 Summary by Item:*
+• *Item Name:* Total Quantity
+  • Any relevant notes
+
+## Receipt Split Mode
+If someone posts a receipt (with total amount, delivery cost, service charge, VAT/tax), calculate how much each person owes:
+
+When you see a receipt image:
+1. Extract all items, prices, delivery cost, service charge, and VAT
+2. Match items to users based on their orders in the thread
+3. If any items on the receipt were NOT ordered by anyone in the thread, group them under "Offline Orders" (someone added them outside the thread)
+4. Split the delivery cost EQUALLY among all users INCLUDING the offline orders user (flat rate per person)
+5. Split service charge and VAT proportionally based on each person's item subtotal (including offline orders)
+
+*💰 Bill Split:*
+• *User Name:* Total Amount
+  • Items: XX EGP
+  • Delivery: XX EGP (split equally)
+  • Service: XX EGP (proportional)
+  • VAT: XX EGP (proportional)
+
+• *Offline Orders:* Total Amount (if any unmatched items exist)
+  • Items: XX EGP
+  • Delivery: XX EGP (split equally)
+  • Service: XX EGP (proportional)
+  • VAT: XX EGP (proportional)
+
+Show clear, easy-to-read breakdowns using bullet points and bold text.`;
   }
 
   /**
@@ -38,17 +207,15 @@ export class GeminiService {
    * @returns Formatted prompt string
    */
   private buildPrompt(messages: Message[]): string {
-    const systemPrompt = `You are Garcon, a helpful and playful AI assistant in a Slack workspace.
-You're professional yet approachable, like a skilled French waiter who knows how to keep things light while getting the job done.
-Be concise, friendly, and occasionally sprinkle in a touch of charm. Keep responses focused and helpful.`;
+    const systemPrompt = this.buildSystemPrompt();
 
     const conversationText = messages
       .map((msg) => {
-        const role = msg.role === "user" ? "User" : "Garcon";
+        const role = msg.role === "user" ? msg.userName || "User" : "Garçon";
         return `${role}: ${msg.content}`;
       })
       .join("\n\n");
 
-    return `${systemPrompt}\n\nConversation:\n${conversationText}\n\nGarcon:`;
+    return `${systemPrompt}\n\nConversation:\n${conversationText}\n\nGarçon:`;
   }
 }

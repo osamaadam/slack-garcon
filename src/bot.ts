@@ -23,7 +23,7 @@ export class GarconBot {
       socketMode: true,
     });
 
-    this.geminiService = new GeminiService(geminiApiKey);
+    this.geminiService = new GeminiService(geminiApiKey, slackBotToken);
     this.slackService = new SlackService(slackBotToken);
 
     this.registerEventHandlers();
@@ -43,14 +43,29 @@ export class GarconBot {
    * @param event - Slack app mention event
    */
   private async handleAppMention(event: AppMentionEvent): Promise<void> {
+    const requestId = `${event.channel}-${Date.now()}`;
+
     try {
+      console.log(`[${requestId}] 📨 Mention received`);
+      console.log(`[${requestId}]   User: ${event.user}`);
+      console.log(`[${requestId}]   Channel: ${event.channel}`);
+      console.log(`[${requestId}]   Text: "${event.text}"`);
+
       const { channel, thread_ts, ts } = event;
       const threadTs = thread_ts || ts;
 
+      console.log(`[${requestId}] 👥 Fetching channel members...`);
+      const channelMembers = await this.slackService.getChannelMembers(channel);
+      console.log(
+        `[${requestId}]   Channel has ${channelMembers.length} member(s)`
+      );
+
+      console.log(`[${requestId}] 🧵 Fetching thread messages...`);
       const messages = await this.slackService.fetchThreadMessages(
         channel,
         threadTs
       );
+      console.log(`[${requestId}]   Retrieved ${messages.length} message(s)`);
 
       const botUserId = this.slackService.getBotUserId();
       const aiMessages = this.slackService.convertToAIMessages(
@@ -58,15 +73,29 @@ export class GarconBot {
         botUserId
       );
 
+      console.log(`[${requestId}] 🤖 Sending to Gemini...`);
+      console.log(
+        `[${requestId}]   Conversation length: ${aiMessages.length} message(s)`
+      );
+
       const response = await this.geminiService.generateResponse(aiMessages);
 
+      console.log(`[${requestId}] ✅ Gemini response received`);
+      console.log(
+        `[${requestId}]   Response length: ${response.length} characters`
+      );
+
+      console.log(`[${requestId}] 💬 Posting response to Slack...`);
       await this.slackService.postMessage(channel, response, threadTs);
+
+      console.log(`[${requestId}] ✨ Request completed successfully`);
     } catch (error) {
-      console.error("Error handling app mention:", error);
+      console.error(`[${requestId}] ❌ Error handling app mention:`, error);
 
       const errorMessage =
         error instanceof Error ? error.message : "An unknown error occurred";
 
+      console.log(`[${requestId}] 🔧 Sending error message to user...`);
       await this.slackService.postMessage(
         event.channel,
         `Pardon! I encountered an issue: ${errorMessage}`,
