@@ -1,5 +1,6 @@
 import { getEnvConfig } from "./config";
 import { GarconBot } from "./bot";
+import logger from "./logger";
 
 /**
  * Application entry point
@@ -18,7 +19,7 @@ async function main(): Promise<void> {
     await bot.start(config.port);
 
     const shutdown = async (): Promise<void> => {
-      console.log("\n🛑 Shutting down gracefully...");
+      logger.info("Shutting down gracefully...");
       await bot.stop();
       process.exit(0);
     };
@@ -26,7 +27,7 @@ async function main(): Promise<void> {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
   } catch (error) {
-    console.error("Failed to start Garcon:", error);
+    logger.error("Failed to start Garçon", { error });
     process.exit(1);
   }
 }

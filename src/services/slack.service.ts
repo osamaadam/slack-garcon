@@ -1,5 +1,6 @@
 import { WebClient } from "@slack/web-api";
 import { Message } from "./gemini.service";
+import logger from "../logger";
 
 export interface SlackFile {
   url: string;
@@ -60,29 +61,6 @@ export class SlackService {
   }
 
   /**
-   * Fetches all members in a channel
-   * @param channel - Channel ID
-   * @returns Array of user IDs in the channel
-   */
-  async getChannelMembers(channel: string): Promise<string[]> {
-    console.log(`  👥 Fetching members for channel: ${channel}`);
-
-    try {
-      const result = await this.client.conversations.members({
-        channel,
-      });
-
-      const memberIds = (result.members || []) as string[];
-      console.log(`  ✓ Found ${memberIds.length} member(s) in channel`);
-
-      return memberIds;
-    } catch (error) {
-      console.error(`  ✗ Failed to fetch channel members:`, error);
-      return [];
-    }
-  }
-
-  /**
    * Fetches user information for a given user ID
    * @param userId - User ID to fetch information for
    * @returns User information including name and real name
@@ -104,7 +82,7 @@ export class SlackService {
       }
       return null;
     } catch (error) {
-      console.error(`  ✗ Failed to fetch user info for ${userId}:`, error);
+      logger.error("Failed to fetch user info", { userId, error });
       return null;
     }
   }
@@ -117,7 +95,9 @@ export class SlackService {
   async getUserInfoBatch(
     userIds: string[]
   ): Promise<Map<string, { name: string; realName: string }>> {
-    console.log(`  👤 Fetching info for ${userIds.length} user(s)`);
+    logger.info("Fetching user information batch", {
+      userCount: userIds.length,
+    });
 
     const userMap = new Map<string, { name: string; realName: string }>();
 
@@ -133,7 +113,9 @@ export class SlackService {
       })
     );
 
-    console.log(`  ✓ Fetched info for ${userMap.size} user(s)`);
+    logger.info("User information batch fetched", {
+      fetchedCount: userMap.size,
+    });
     return userMap;
   }
 
@@ -147,7 +129,7 @@ export class SlackService {
     channel: string,
     threadTs: string
   ): Promise<SlackMessage[]> {
-    console.log(`  📥 Fetching thread: ${threadTs} from channel: ${channel}`);
+    logger.info("Fetching thread messages", { channel, threadTs });
 
     const result = await this.client.conversations.replies({
       channel,
@@ -155,7 +137,7 @@ export class SlackService {
     });
 
     if (!result.messages) {
-      console.log(`  ⚠️  No messages found in thread`);
+      logger.warn("No messages found in thread", { channel, threadTs });
       return [];
     }
 
@@ -201,16 +183,17 @@ export class SlackService {
       }
     });
 
-    console.log(`  ✓ Fetched ${messages.length} message(s)`);
-    messages.forEach((msg, idx) => {
-      const userName = msg.userName || msg.user;
-      const preview = msg.text.substring(0, 50).replace(/\n/g, " ");
-      const fileInfo = msg.files ? ` [${msg.files.length} image(s)]` : "";
-      console.log(
-        `    ${idx + 1}. ${userName}: "${preview}${
-          msg.text.length > 50 ? "..." : ""
-        }"${fileInfo}`
-      );
+    logger.info("Thread messages fetched", {
+      channel,
+      threadTs,
+      messageCount: messages.length,
+      messages: messages.map((msg, idx) => ({
+        index: idx + 1,
+        user: msg.userName || msg.user,
+        textPreview: msg.text.substring(0, 50).replace(/\n/g, " "),
+        hasMoreText: msg.text.length > 50,
+        fileCount: msg.files?.length || 0,
+      })),
     });
 
     return messages;

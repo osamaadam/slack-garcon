@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import logger from "../logger";
 
 export interface ImageData {
   url: string;
@@ -42,19 +43,19 @@ export class GeminiService {
 
     const prompt = this.buildPrompt(messages);
 
-    console.log("🔮 Gemini Prompt:");
-    console.log("─".repeat(80));
-    console.log(prompt.substring(0, 500) + (prompt.length > 500 ? "..." : ""));
-    console.log("─".repeat(80));
+    logger.debug("Gemini prompt generated", {
+      promptLength: prompt.length,
+      promptPreview: prompt.substring(0, 500),
+    });
 
     const result = await this.model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
 
-    console.log("🎯 Gemini Response Preview:");
-    console.log("─".repeat(80));
-    console.log(text.substring(0, 300) + (text.length > 300 ? "..." : ""));
-    console.log("─".repeat(80));
+    logger.debug("Gemini response received", {
+      responseLength: text.length,
+      responsePreview: text.substring(0, 300),
+    });
 
     return text;
   }
@@ -80,7 +81,10 @@ export class GeminiService {
       parts.push({ text: `${role}: ${msg.content}\n` });
 
       if (msg.images && msg.images.length > 0) {
-        console.log(`📸 Processing ${msg.images.length} image(s) from ${role}`);
+        logger.info("Processing images", {
+          imageCount: msg.images.length,
+          role,
+        });
 
         for (const image of msg.images) {
           try {
@@ -91,9 +95,11 @@ export class GeminiService {
                 mimeType: image.mimeType,
               },
             });
-            console.log(`  ✓ Image loaded: ${image.url.substring(0, 50)}...`);
+            logger.debug("Image loaded successfully", {
+              urlPreview: image.url.substring(0, 50),
+            });
           } catch (error) {
-            console.error(`  ✗ Failed to load image: ${error}`);
+            logger.error("Failed to load image", { url: image.url, error });
           }
         }
       }
@@ -101,22 +107,22 @@ export class GeminiService {
 
     parts.push({ text: "\nGarçon:" });
 
-    console.log("🔮 Gemini Prompt with images:");
-    console.log("─".repeat(80));
-    console.log(`Text parts: ${parts.filter((p) => "text" in p).length}`);
-    console.log(
-      `Image parts: ${parts.filter((p) => "inlineData" in p).length}`
-    );
-    console.log("─".repeat(80));
+    const textPartCount = parts.filter((p) => "text" in p).length;
+    const imagePartCount = parts.filter((p) => "inlineData" in p).length;
+
+    logger.debug("Gemini prompt with images generated", {
+      textPartCount,
+      imagePartCount,
+    });
 
     const result = await this.model.generateContent(parts);
     const response = result.response;
     const text = response.text();
 
-    console.log("🎯 Gemini Response Preview:");
-    console.log("─".repeat(80));
-    console.log(text.substring(0, 300) + (text.length > 300 ? "..." : ""));
-    console.log("─".repeat(80));
+    logger.debug("Gemini response with images received", {
+      responseLength: text.length,
+      responsePreview: text.substring(0, 300),
+    });
 
     return text;
   }

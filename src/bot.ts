@@ -1,6 +1,7 @@
 import { App, AppMentionEvent } from "@slack/bolt";
 import { GeminiService } from "./services/gemini.service";
 import { SlackService } from "./services/slack.service";
+import logger from "./logger";
 
 /**
  * Main bot orchestrator that handles Slack events and AI interactions
@@ -46,26 +47,26 @@ export class GarconBot {
     const requestId = `${event.channel}-${Date.now()}`;
 
     try {
-      console.log(`[${requestId}] 📨 Mention received`);
-      console.log(`[${requestId}]   User: ${event.user}`);
-      console.log(`[${requestId}]   Channel: ${event.channel}`);
-      console.log(`[${requestId}]   Text: "${event.text}"`);
+      logger.info("Mention received", {
+        requestId,
+        user: event.user,
+        channel: event.channel,
+        text: event.text,
+      });
 
       const { channel, thread_ts, ts } = event;
       const threadTs = thread_ts || ts;
 
-      console.log(`[${requestId}] 👥 Fetching channel members...`);
-      const channelMembers = await this.slackService.getChannelMembers(channel);
-      console.log(
-        `[${requestId}]   Channel has ${channelMembers.length} member(s)`
-      );
-
-      console.log(`[${requestId}] 🧵 Fetching thread messages...`);
+      logger.info("Fetching thread messages", { requestId, channel, threadTs });
       const messages = await this.slackService.fetchThreadMessages(
         channel,
         threadTs
       );
-      console.log(`[${requestId}]   Retrieved ${messages.length} message(s)`);
+
+      logger.info("Thread messages fetched", {
+        requestId,
+        messageCount: messages.length,
+      });
 
       const botUserId = this.slackService.getBotUserId();
       const aiMessages = this.slackService.convertToAIMessages(
@@ -73,29 +74,33 @@ export class GarconBot {
         botUserId
       );
 
-      console.log(`[${requestId}] 🤖 Sending to Gemini...`);
-      console.log(
-        `[${requestId}]   Conversation length: ${aiMessages.length} message(s)`
-      );
+      logger.info("Sending to Gemini", {
+        requestId,
+        conversationLength: aiMessages.length,
+      });
 
       const response = await this.geminiService.generateResponse(aiMessages);
 
-      console.log(`[${requestId}] ✅ Gemini response received`);
-      console.log(
-        `[${requestId}]   Response length: ${response.length} characters`
-      );
+      logger.info("Gemini response received", {
+        requestId,
+        responseLength: response.length,
+      });
 
-      console.log(`[${requestId}] 💬 Posting response to Slack...`);
+      logger.info("Posting response to Slack", {
+        requestId,
+        channel,
+        threadTs,
+      });
       await this.slackService.postMessage(channel, response, threadTs);
 
-      console.log(`[${requestId}] ✨ Request completed successfully`);
+      logger.info("Request completed successfully", { requestId });
     } catch (error) {
-      console.error(`[${requestId}] ❌ Error handling app mention:`, error);
+      logger.error("Error handling app mention", { requestId, error });
 
       const errorMessage =
         error instanceof Error ? error.message : "An unknown error occurred";
 
-      console.log(`[${requestId}] 🔧 Sending error message to user...`);
+      logger.info("Sending error message to user", { requestId });
       await this.slackService.postMessage(
         event.channel,
         `Pardon! I encountered an issue: ${errorMessage}`,
@@ -110,7 +115,7 @@ export class GarconBot {
   async start(port: number): Promise<void> {
     await this.slackService.initialize();
     await this.app.start(port);
-    console.log(`⚡️ Garcon is ready to serve on port ${port}!`);
+    logger.info("Garcon is ready to serve", { port });
   }
 
   /**
@@ -118,6 +123,6 @@ export class GarconBot {
    */
   async stop(): Promise<void> {
     await this.app.stop();
-    console.log("👋 Garcon has left the building");
+    logger.info("Garcon has left the building");
   }
 }
