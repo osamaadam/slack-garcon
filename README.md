@@ -1,16 +1,16 @@
-# Garcon 🎩
+# Garcon
 
-A delightful TypeScript Slack bot powered by Google's Gemini AI. Just mention @Garcon in any channel or thread, and watch as this charming digital waiter serves up intelligent responses with professional flair.
+A delightful TypeScript Slack bot powered by Google's Gemini AI. Just mention @Garcon in any channel or thread, and watch as this charming digital assistant serves up intelligent responses with the full context of your conversation.
 
 ## Features
 
 - 🤖 Responds to mentions in channels and threads
-- 🧵 Full thread context awareness
-- 🖼️ Image and receipt analysis powered by Gemini Pro Vision
-- 📊 Aggregates food orders from conversation threads
-- 💰 Automatically calculates bill splits from receipt images
-- 🌐 Multi-language support (English, Arabic, Franko/Arabizi)
-- 🧠 Powered by Google Gemini AI
+- 🧵 Full thread context awareness - fetches entire conversation history
+- 🖼️ Image analysis powered by Gemini Pro Vision
+- 💰 Smart bill splitting with proportional charge distribution
+- 🎭 Fully customizable personality via `system_prompt.txt`
+- 🧠 Powered by Google Gemini AI (`gemini-2.5-pro`)
+- 🔄 Built-in retry logic with exponential backoff for reliability
 - ⚡️ Built with TypeScript for type safety
 - 🔌 Socket Mode for easy local development
 
@@ -88,57 +88,82 @@ npm start
 
 ## Usage
 
-### Food Order Aggregation
+Mention @Garcon in any Slack channel or thread to get a response. The bot will:
 
-When team members are placing food orders in a thread, mention Garçon to aggregate the orders:
+1. **Fetch the entire thread context** - All messages from the conversation, including any previous messages in the thread
+2. **Process any images** - Analyzes images uploaded in the thread (receipts, screenshots, diagrams, etc.)
+3. **Generate contextual responses** - Uses Google Gemini AI to provide intelligent answers based on the full conversation
 
+### Examples
+
+#### General conversation
+
+```text
+User: Hey team, what's the best approach for handling errors in async functions?
+@garcon can you help?
 ```
-User 1: I want a burger with extra cheese
-User 2: Pizza margherita for me
-User 3: Burger too, no pickles
-@garcon summarize the orders
-```
 
-Garçon will respond with organized bullet lists showing orders by user and summary by item.
+#### Image analysis
 
-### Receipt Bill Splitting
-
-After someone uploads a receipt image, mention Garçon to calculate the bill split:
-
-```
+```text
 [User uploads receipt image]
-@garcon split the bill
+@garcon can you split this bill based on our orders above?
 ```
 
-Garçon will analyze the receipt, match items to users' orders, and calculate how much each person owes including their share of delivery, service charges, and VAT.
+#### Thread context
 
-### General Assistance
-
-Simply mention the bot for any questions:
-
+```text
+User 1: I'm having trouble with TypeScript generics
+User 2: Have you tried using extends?
+User 1: Yeah but I'm getting weird errors
+@garcon what am I missing here?
 ```
-@garcon what's the best way to handle async errors in TypeScript?
+
+The bot sees the entire conversation and provides relevant, contextual responses.
+
+## Customization
+
+### Personalizing Your Bot
+
+You can completely customize the bot's personality and behavior by editing `system_prompt.txt`. This file contains the instructions that tell Gemini AI how to behave.
+
+#### Default behavior
+
+The bot roleplays as جعفر العمدة (a charismatic Egyptian character), aggregates food orders, and splits bills with Egyptian humor.
+
+#### To customize
+
+Simply edit `system_prompt.txt` with your own instructions. For example:
+
+```txt
+You are a professional code review assistant. When analyzing code in thread context:
+- Point out potential bugs and security issues
+- Suggest performance improvements
+- Follow team coding standards
+- Be constructive and helpful
+
+Use clear formatting with bullet points and code blocks.
 ```
 
-Garçon will fetch the entire thread context and provide an intelligent, contextual response.
+The bot will use the full Slack thread context with your custom personality to respond to mentions. You can make it:
 
-## Project Structure
+- A code reviewer that analyzes snippets shared in threads
+- A documentation assistant that helps with technical writing
+- A project manager that tracks action items in conversations
+- A language tutor that helps with translations
+- Anything you can imagine!
 
-```
-garcon/
-├── src/
-│   ├── services/
-│   │   ├── gemini.service.ts    # Gemini AI integration
-│   │   └── slack.service.ts     # Slack API wrapper
-│   ├── bot.ts                   # Main bot orchestrator
-│   ├── config.ts                # Environment configuration
-│   └── index.ts                 # Application entry point
-├── .env.example                 # Environment template
-├── package.json
-├── tsconfig.json
-└── README.md
-```
+The system prompt has access to the entire thread history, so you can create context-aware bots tailored to your team's specific needs.
 
 ## License
 
-MIT
+MIT License - Copyright (c) 2025 Osama Adam
+
+See [LICENSE](LICENSE) file for details.
+
+## Author
+
+Osama Adam
+
+- Email: [osamaadamme@gmail.com](mailto:osamaadamme@gmail.com)
+- GitHub: [@osamaadam](https://github.com/osamaadam)

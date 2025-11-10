@@ -17,7 +17,7 @@
     "ai",
     "typescript"
   ],
-  "author": "",
+  "author": "Osama Adam <osamaadamme@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "@google/genai": "^1.29.0",
