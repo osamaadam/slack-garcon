@@ -21,9 +21,11 @@ export class GeminiService {
   private model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>;
   private botToken: string;
 
-  constructor(apiKey: string, slackBotToken: string) {
+  constructor(apiKey: string, slackBotToken: string, modelName: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
-    this.model = this.genAI.getGenerativeModel({ model: "gemini-2.5-pro	" });
+    this.model = this.genAI.getGenerativeModel({
+      model: modelName,
+    });
     this.botToken = slackBotToken;
   }
 

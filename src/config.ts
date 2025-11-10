@@ -7,6 +7,7 @@ interface EnvConfig {
   slackAppToken: string;
   slackSigningSecret: string;
   geminiApiKey: string;
+  geminiModel: string;
   port: number;
 }
 
@@ -35,6 +36,7 @@ export function getEnvConfig(): EnvConfig {
     slackAppToken: process.env.SLACK_APP_TOKEN!,
     slackSigningSecret: process.env.SLACK_SIGNING_SECRET!,
     geminiApiKey: process.env.GEMINI_API_KEY!,
+    geminiModel: process.env.GEMINI_MODEL || "gemini-2.5-pro",
     port: parseInt(process.env.PORT || "3000", 10),
   };
 }

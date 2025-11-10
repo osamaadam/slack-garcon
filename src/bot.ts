@@ -15,7 +15,8 @@ export class GarconBot {
     slackBotToken: string,
     slackAppToken: string,
     slackSigningSecret: string,
-    geminiApiKey: string
+    geminiApiKey: string,
+    geminiModel: string
   ) {
     this.app = new App({
       token: slackBotToken,
@@ -24,7 +25,11 @@ export class GarconBot {
       socketMode: true,
     });
 
-    this.geminiService = new GeminiService(geminiApiKey, slackBotToken);
+    this.geminiService = new GeminiService(
+      geminiApiKey,
+      slackBotToken,
+      geminiModel
+    );
     this.slackService = new SlackService(slackBotToken);
 
     this.registerEventHandlers();

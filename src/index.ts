@@ -13,7 +13,8 @@ async function main(): Promise<void> {
       config.slackBotToken,
       config.slackAppToken,
       config.slackSigningSecret,
-      config.geminiApiKey
+      config.geminiApiKey,
+      config.geminiModel
     );
 
     await bot.start(config.port);
