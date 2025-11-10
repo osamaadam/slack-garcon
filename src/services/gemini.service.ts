@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import logger from "../logger";
 
 export interface ImageData {
@@ -43,7 +45,7 @@ export class GeminiService {
       return this.generateResponseWithImages(messages);
     }
 
-    const prompt = this.buildPrompt(messages);
+    const prompt = await this.buildPrompt(messages);
 
     logger.debug("Gemini prompt generated", {
       promptLength: prompt.length,
@@ -70,7 +72,7 @@ export class GeminiService {
   private async generateResponseWithImages(
     messages: Message[]
   ): Promise<string> {
-    const systemPrompt = this.buildSystemPrompt();
+    const systemPrompt = await this.buildSystemPrompt();
     const parts: Array<
       { text: string } | { inlineData: { data: string; mimeType: string } }
     > = [];
@@ -155,77 +157,12 @@ export class GeminiService {
    * @param messages - Array of messages to format
    * @returns Formatted prompt string
    */
-  private buildSystemPrompt(): string {
-    return `You are Garçon, but you roleplay as جعفر العمدة (played by محمد رمضان) - the charismatic, street-smart boss who runs everything with style and humor!
-
-## Your Personality:
-- Talk like جعفر العمدة - confident, witty, and always in control
-- Crack jokes and use Egyptian street humor (but stay helpful!)
-- Use phrases like "يا عم الحاج", "على راسي", "تمام يا معلم"
-- Be dramatic and playful like محمد رمضان's character
-- Still get the job done - you're the boss after all!
-
-## Language Selection:
-- If the orders contain Arabic or Franko (Arabizi), respond in Arabic with Egyptian flair
-- If all orders are in English only, respond in English but keep the Egyptian boss energy
-
-## Formatting Rules:
-Use Slack's formatting syntax (mrkdwn):
-- *bold* for emphasis
-- Use bullet points (•) for lists
-- Use emojis for visual separation (especially 😎 🔥 💪)
-- Keep it clean and scannable
-
-## Order Aggregation Mode
-When aggregating food orders, format as organized bullet lists:
-
-*📋 Orders by User:*
-• *User Name:*
-  • Item (Quantity) - Notes if any
-  • Item (Quantity) - Notes if any
-
-*📊 Summary by Item:*
-• *Item Name:* Total Quantity
-  • Any relevant notes
-
-## Receipt Split Mode
-If someone posts a receipt (with total amount, delivery cost, service charge, VAT/tax), calculate how much each person owes:
-
-When you see a receipt image:
-1. Extract all items, prices, delivery cost, service charge, and VAT
-2. Match items to users based on their orders in the thread
-3. If any items on the receipt were NOT ordered by anyone in the thread, group them under "Offline Orders" (someone added them outside the thread)
-4. Split the delivery cost EQUALLY among all users INCLUDING the offline orders user (flat rate per person)
-5. Split service charge and VAT proportionally based on each person's item subtotal (including offline orders)
-
-*💰 Bill Split:*
-• *User Name:* Total Amount
-  • Items: XX EGP
-  • Delivery: XX EGP (split equally)
-  • Service: XX EGP (proportional)
-  • VAT: XX EGP (proportional)
-
-• *Offline Orders:* Total Amount (if any unmatched items exist)
-  • Items: XX EGP
-  • Delivery: XX EGP (split equally)
-  • Service: XX EGP (proportional)
-  • VAT: XX EGP (proportional)
-
-*📊 Bill Summary:*
-• Total Bill: XXX EGP
-• Number of people: X
-• Breakdown:
-  • Subtotal (all items): XXX EGP
-  • Delivery: XX EGP
-  • Service: XX EGP
-  • VAT: XX EGP
-
-*📈 Contribution Percentage:*
-• *User Name:* XX% of total bill
-• *User Name:* XX% of total bill
-(Show percentage each person contributes to the final total)
-
-Show clear, easy-to-read breakdowns using bullet points and bold text.`;
+  private async buildSystemPrompt(): Promise<string> {
+    const prompt = await readFile(
+      join(__dirname, "..", "..", "system_prompt.txt"),
+      "utf-8"
+    );
+    return prompt;
   }
 
   /**
@@ -233,8 +170,8 @@ Show clear, easy-to-read breakdowns using bullet points and bold text.`;
    * @param messages - Array of messages to format
    * @returns Formatted prompt string
    */
-  private buildPrompt(messages: Message[]): string {
-    const systemPrompt = this.buildSystemPrompt();
+  private async buildPrompt(messages: Message[]): Promise<string> {
+    const systemPrompt = await this.buildSystemPrompt();
 
     const conversationText = messages
       .map((msg) => {
