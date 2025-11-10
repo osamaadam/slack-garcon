@@ -20,6 +20,7 @@ COPY package*.json ./
 RUN npm ci --omit dev
 
 COPY --from=builder /app/dist ./dist
+COPY system_prompt.txt ./
 
 USER node
 
