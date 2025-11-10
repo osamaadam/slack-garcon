@@ -10,3 +10,7 @@ primary_region = "fra"
   memory = "256mb"
   cpu_kind = "shared"
   cpus = 1
+
+[scaling]
+  min_machines = 1
+  max_machines = 1
