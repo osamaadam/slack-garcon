@@ -1,10 +1,11 @@
 import { GoogleGenAI, Part } from "@google/genai";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import pRetry from "p-retry";
 import logger from "../logger";
 
-export interface ImageData {
-  url: string;
+export interface Base64Image {
+  data: string;
   mimeType: string;
 }
 
@@ -12,7 +13,7 @@ export interface Message {
   role: "user" | "model";
   content: string;
   userName?: string;
-  images?: ImageData[];
+  images?: Base64Image[];
 }
 
 /**
@@ -21,13 +22,11 @@ export interface Message {
 export class GeminiService {
   private ai: GoogleGenAI;
   private modelName: string;
-  private botToken: string;
   private systemPrompt?: string;
 
-  constructor(apiKey: string, slackBotToken: string, modelName: string) {
+  constructor(apiKey: string, modelName: string) {
     this.ai = new GoogleGenAI({ apiKey });
     this.modelName = modelName;
-    this.botToken = slackBotToken;
   }
 
   /**
@@ -48,10 +47,22 @@ export class GeminiService {
       textParts: totalParts - imageParts,
     });
 
-    const result = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: [systemPrompt, ...parts],
-    });
+    const result = await pRetry(
+      () =>
+        this.ai.models.generateContent({
+          model: this.modelName,
+          contents: [systemPrompt, ...parts],
+        }),
+      {
+        retries: 3,
+        onFailedAttempt: (error) => {
+          logger.warn("Gemini API request failed, retrying...", {
+            attempt: error.attemptNumber,
+            retriesLeft: error.retriesLeft,
+          });
+        },
+      }
+    );
 
     const text = result.text ?? "";
 
@@ -76,52 +87,23 @@ export class GeminiService {
       parts.push({ text: `${role}: ${msg.content}` });
 
       if (msg.images && msg.images.length > 0) {
-        logger.info("Processing images", {
+        logger.info("Adding images to request", {
           imageCount: msg.images.length,
           role,
         });
 
         for (const image of msg.images) {
-          try {
-            const imageData = await this.fetchImageAsBase64(image.url);
-            parts.push({
-              inlineData: {
-                data: imageData,
-                mimeType: image.mimeType,
-              },
-            });
-            logger.debug("Image loaded successfully", {
-              urlPreview: image.url.substring(0, 50),
-            });
-          } catch (error) {
-            logger.error("Failed to load image", { url: image.url, error });
-          }
+          parts.push({
+            inlineData: {
+              data: image.data,
+              mimeType: image.mimeType,
+            },
+          });
         }
       }
     }
 
     return parts;
-  }
-
-  /**
-   * Fetches an image from Slack and converts it to base64
-   * @param url - Slack image URL
-   * @returns Base64 encoded image data
-   */
-  private async fetchImageAsBase64(url: string): Promise<string> {
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${this.botToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.statusText}`);
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    return buffer.toString("base64");
   }
 
   /**

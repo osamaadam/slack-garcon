@@ -1,7 +1,8 @@
 import { App, AppMentionEvent } from "@slack/bolt";
-import { GeminiService } from "./services/gemini.service";
-import { SlackService } from "./services/slack.service";
 import logger from "./logger";
+import { GeminiService, Message } from "./services/gemini.service";
+import { ImageProcessingService } from "./services/image-processing.service";
+import { SlackService } from "./services/slack.service";
 
 /**
  * Main bot orchestrator that handles Slack events and AI interactions
@@ -10,6 +11,7 @@ export class GarconBot {
   private app: App;
   private geminiService: GeminiService;
   private slackService: SlackService;
+  private imageProcessingService: ImageProcessingService;
 
   constructor(
     slackBotToken: string,
@@ -25,12 +27,9 @@ export class GarconBot {
       socketMode: true,
     });
 
-    this.geminiService = new GeminiService(
-      geminiApiKey,
-      slackBotToken,
-      geminiModel
-    );
     this.slackService = new SlackService(slackBotToken);
+    this.imageProcessingService = new ImageProcessingService();
+    this.geminiService = new GeminiService(geminiApiKey, geminiModel);
 
     this.registerEventHandlers();
   }
@@ -63,28 +62,45 @@ export class GarconBot {
       const threadTs = thread_ts || ts;
 
       logger.info("Fetching thread messages", { requestId, channel, threadTs });
-      const messages = await this.slackService.fetchThreadMessages(
+      const slackMessages = await this.slackService.fetchThreadMessages(
         channel,
         threadTs
       );
 
       logger.info("Thread messages fetched", {
         requestId,
-        messageCount: messages.length,
+        messageCount: slackMessages.length,
       });
 
+      // Convert Slack messages to Gemini messages
       const botUserId = this.slackService.getBotUserId();
-      const aiMessages = this.slackService.convertToAIMessages(
-        messages,
-        botUserId
-      );
+      const geminiMessages: Message[] = [];
+
+      for (const msg of slackMessages) {
+        const geminiMessage: Message = {
+          role: msg.user === botUserId ? "model" : "user",
+          content: msg.text,
+          userName: msg.userName,
+        };
+
+        // Convert image blobs to base64 if present
+        if (msg.images && msg.images.length > 0) {
+          const base64Images =
+            await this.imageProcessingService.convertBlobsToBase64(msg.images);
+          geminiMessage.images = base64Images;
+        }
+
+        geminiMessages.push(geminiMessage);
+      }
 
       logger.info("Sending to Gemini", {
         requestId,
-        conversationLength: aiMessages.length,
+        conversationLength: geminiMessages.length,
       });
 
-      const response = await this.geminiService.generateResponse(aiMessages);
+      const response = await this.geminiService.generateResponse(
+        geminiMessages
+      );
 
       logger.info("Gemini response received", {
         requestId,

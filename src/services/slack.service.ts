@@ -1,9 +1,9 @@
 import { WebClient } from "@slack/web-api";
-import { Message } from "./gemini.service";
+import pRetry from "p-retry";
 import logger from "../logger";
 
-export interface SlackFile {
-  url: string;
+export interface SlackImageBlob {
+  blob: Blob;
   mimeType: string;
   name: string;
 }
@@ -13,20 +13,7 @@ export interface SlackMessage {
   user: string;
   userName?: string;
   ts: string;
-  files?: SlackFile[];
-}
-
-interface SlackMessageItem {
-  text?: string;
-  user?: string;
-  bot_id?: string;
-  ts?: string;
-  files?: Array<{
-    url_private?: string;
-    url_private_download?: string;
-    mimetype?: string;
-    name?: string;
-  }>;
+  images?: SlackImageBlob[];
 }
 
 /**
@@ -44,7 +31,15 @@ export class SlackService {
    * Initializes the service by fetching bot user information
    */
   async initialize(): Promise<void> {
-    const authResult = await this.client.auth.test();
+    const authResult = await pRetry(() => this.client.auth.test(), {
+      retries: 3,
+      onFailedAttempt: (error) => {
+        logger.warn("Slack auth.test failed, retrying...", {
+          attempt: error.attemptNumber,
+          retriesLeft: error.retriesLeft,
+        });
+      },
+    });
     this.botUserId = authResult.user_id as string;
   }
 
@@ -69,9 +64,19 @@ export class SlackService {
     userId: string
   ): Promise<{ id: string; name: string; realName: string } | null> {
     try {
-      const result = await this.client.users.info({
-        user: userId,
-      });
+      const result = await pRetry(
+        () => this.client.users.info({ user: userId }),
+        {
+          retries: 3,
+          onFailedAttempt: (error) => {
+            logger.warn("Slack users.info failed, retrying...", {
+              userId,
+              attempt: error.attemptNumber,
+              retriesLeft: error.retriesLeft,
+            });
+          },
+        }
+      );
 
       if (result.user) {
         return {
@@ -131,41 +136,62 @@ export class SlackService {
   ): Promise<SlackMessage[]> {
     logger.info("Fetching thread messages", { channel, threadTs });
 
-    const result = await this.client.conversations.replies({
-      channel,
-      ts: threadTs,
-    });
+    const result = await pRetry(
+      () => this.client.conversations.replies({ channel, ts: threadTs }),
+      {
+        retries: 3,
+        onFailedAttempt: (error) => {
+          logger.warn("Slack conversations.replies failed, retrying...", {
+            channel,
+            threadTs,
+            attempt: error.attemptNumber,
+            retriesLeft: error.retriesLeft,
+          });
+        },
+      }
+    );
 
     if (!result.messages) {
       logger.warn("No messages found in thread", { channel, threadTs });
       return [];
     }
 
-    const messages: SlackMessage[] = result.messages.map(
-      (msg: SlackMessageItem) => {
-        const files: SlackFile[] = [];
+    const messages: SlackMessage[] = [];
 
-        if (msg.files && msg.files.length > 0) {
-          msg.files.forEach((file) => {
-            const url = file.url_private_download || file.url_private;
-            if (url && file.mimetype?.startsWith("image/")) {
-              files.push({
-                url,
+    for (const msg of result.messages) {
+      const slackMessage: SlackMessage = {
+        text: msg.text || "",
+        user: msg.user || msg.bot_id || "unknown",
+        ts: msg.ts || "",
+      };
+
+      // Fetch images if present
+      if (msg.files && msg.files.length > 0) {
+        const imageBlobs: SlackImageBlob[] = [];
+
+        for (const file of msg.files) {
+          const url = file.url_private_download || file.url_private;
+          if (url && file.mimetype?.startsWith("image/")) {
+            try {
+              const blob = await this.fetchImageAsBlob(url);
+              imageBlobs.push({
+                blob,
                 mimeType: file.mimetype,
                 name: file.name || "image",
               });
+            } catch (error) {
+              logger.error("Failed to fetch image blob", { url, error });
             }
-          });
+          }
         }
 
-        return {
-          text: msg.text || "",
-          user: msg.user || msg.bot_id || "unknown",
-          ts: msg.ts || "",
-          files: files.length > 0 ? files : undefined,
-        };
+        if (imageBlobs.length > 0) {
+          slackMessage.images = imageBlobs;
+        }
       }
-    );
+
+      messages.push(slackMessage);
+    }
 
     const uniqueUserIds = [
       ...new Set(
@@ -192,7 +218,7 @@ export class SlackService {
         user: msg.userName || msg.user,
         textPreview: msg.text.substring(0, 50).replace(/\n/g, " "),
         hasMoreText: msg.text.length > 50,
-        fileCount: msg.files?.length || 0,
+        imageCount: msg.images?.length || 0,
       })),
     });
 
@@ -200,27 +226,34 @@ export class SlackService {
   }
 
   /**
-   * Converts Slack messages to a format suitable for AI processing
-   * @param messages - Raw Slack messages
-   * @param botUserId - Bot's user ID to identify its own messages
-   * @returns Formatted messages for AI consumption
+   * Fetches an image from Slack as a Blob
+   * @param url - Slack image URL
+   * @returns Blob containing the image data
    */
-  convertToAIMessages(messages: SlackMessage[], botUserId: string): Message[] {
-    return messages.map((msg) => {
-      const aiMessage: Message = {
-        role: msg.user === botUserId ? ("model" as const) : ("user" as const),
-        content: this.cleanMessageText(msg.text),
-        userName: msg.userName,
-      };
+  private async fetchImageAsBlob(url: string): Promise<Blob> {
+    const fetchImage = async (): Promise<Blob> => {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${this.client.token}`,
+        },
+      });
 
-      if (msg.files && msg.files.length > 0) {
-        aiMessage.images = msg.files.map((file) => ({
-          url: file.url,
-          mimeType: file.mimeType,
-        }));
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.statusText}`);
       }
 
-      return aiMessage;
+      return response.blob();
+    };
+
+    return await pRetry(fetchImage, {
+      retries: 3,
+      onFailedAttempt: (error) => {
+        logger.warn("Slack image fetch failed, retrying...", {
+          url: url.substring(0, 50),
+          attempt: error.attemptNumber,
+          retriesLeft: error.retriesLeft,
+        });
+      },
     });
   }
 
@@ -235,19 +268,23 @@ export class SlackService {
     text: string,
     threadTs?: string
   ): Promise<void> {
-    await this.client.chat.postMessage({
-      channel,
-      text,
-      thread_ts: threadTs,
-    });
-  }
-
-  /**
-   * Removes Slack-specific formatting from message text
-   * @param text - Raw message text with Slack formatting
-   * @returns Cleaned message text
-   */
-  private cleanMessageText(text: string): string {
-    return text.replace(/<@[A-Z0-9]+>/g, "").trim();
+    await pRetry(
+      () =>
+        this.client.chat.postMessage({
+          channel,
+          text,
+          thread_ts: threadTs,
+        }),
+      {
+        retries: 3,
+        onFailedAttempt: (error) => {
+          logger.warn("Slack chat.postMessage failed, retrying...", {
+            channel,
+            attempt: error.attemptNumber,
+            retriesLeft: error.retriesLeft,
+          });
+        },
+      }
+    );
   }
 }
