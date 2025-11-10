@@ -211,6 +211,20 @@ When you see a receipt image:
   • Service: XX EGP (proportional)
   • VAT: XX EGP (proportional)
 
+*📊 Bill Summary:*
+• Total Bill: XXX EGP
+• Number of people: X
+• Breakdown:
+  • Subtotal (all items): XXX EGP
+  • Delivery: XX EGP
+  • Service: XX EGP
+  • VAT: XX EGP
+
+*📈 Contribution Percentage:*
+• *User Name:* XX% of total bill
+• *User Name:* XX% of total bill
+(Show percentage each person contributes to the final total)
+
 Show clear, easy-to-read breakdowns using bullet points and bold text.`;
   }
 
