@@ -54,7 +54,11 @@ export class GeminiService {
           contents: [systemPrompt, ...parts],
         }),
       {
-        retries: 3,
+        retries: 5,
+        factor: 2,
+        minTimeout: 1000,
+        maxTimeout: 30000,
+        randomize: true,
         onFailedAttempt: (error) => {
           logger.warn("Gemini API request failed, retrying...", {
             attempt: error.attemptNumber,
