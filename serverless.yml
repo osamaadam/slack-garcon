@@ -1,0 +1,33 @@
+service: garcon-bot
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: ${opt:region, 'eu-central-1'}
+  memorySize: 512
+  timeout: 30
+  environment:
+    SLACK_BOT_TOKEN: ${env:SLACK_BOT_TOKEN}
+    SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET}
+    GEMINI_API_KEY: ${env:GEMINI_API_KEY}
+    GEMINI_MODEL: ${env:GEMINI_MODEL, 'gemini-2.5-flash'}
+    NODE_ENV: production
+
+functions:
+  slack_garcon:
+    handler: dist/lambda.handler
+    url: true
+
+package:
+  patterns:
+  - "dist/**"
+  - "system_prompt.txt"
+  - "!.git/**"
+  - "!.github/**"
+  - "!.vscode/**"
+  - "!node_modules/@types/**"
+  - "!src/**"
+  - "!**/*.test.ts"
+  - "!**/*.spec.ts"
+  - "!tsconfig.json"
+  - "!**/*.map"

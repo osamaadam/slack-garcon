@@ -1,7 +1,7 @@
 import { GoogleGenAI, Part } from "@google/genai";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import pRetry from "p-retry";
+import retry from "retry";
 import logger from "../logger";
 
 export interface Base64Image {
@@ -47,29 +47,39 @@ export class GeminiService {
       textParts: totalParts - imageParts,
     });
 
-    const result = await pRetry(
-      () =>
-        this.ai.models.generateContent({
-          model: this.modelName,
-          contents: parts,
-          config: {
-            systemInstruction: systemPrompt,
-          },
-        }),
-      {
-        retries: 5,
-        factor: 3,
-        minTimeout: 5000,
-        maxTimeout: 10000,
-        randomize: true,
-        onFailedAttempt: (error) => {
-          logger.warn("Gemini API request failed, retrying...", {
-            attempt: error.attemptNumber,
-            retriesLeft: error.retriesLeft,
+    const operation = retry.operation({
+      retries: 5,
+      factor: 3,
+      minTimeout: 5000,
+      maxTimeout: 60000,
+      randomize: true,
+    });
+
+    const result = await new Promise<
+      Awaited<ReturnType<typeof this.ai.models.generateContent>>
+    >((resolve, reject) => {
+      operation.attempt(async (currentAttempt) => {
+        try {
+          const res = await this.ai.models.generateContent({
+            model: this.modelName,
+            contents: parts,
+            config: {
+              systemInstruction: systemPrompt,
+            },
           });
-        },
-      }
-    );
+          resolve(res);
+        } catch (error) {
+          logger.warn("Gemini API request failed, retrying...", {
+            attempt: currentAttempt,
+            retriesLeft: operation.attempts(),
+          });
+
+          if (!operation.retry(error as Error)) {
+            reject(operation.mainError());
+          }
+        }
+      });
+    });
 
     const text = result.text ?? "";
 

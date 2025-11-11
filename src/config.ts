@@ -1,6 +1,6 @@
-import { config } from "dotenv";
+import { config as dotenvConfig } from "dotenv";
 
-config();
+dotenvConfig();
 
 interface EnvConfig {
   slackBotToken: string;
@@ -18,7 +18,6 @@ interface EnvConfig {
 export function getEnvConfig(): EnvConfig {
   const requiredVars = [
     "SLACK_BOT_TOKEN",
-    "SLACK_APP_TOKEN",
     "SLACK_SIGNING_SECRET",
     "GEMINI_API_KEY",
   ];
@@ -40,3 +39,5 @@ export function getEnvConfig(): EnvConfig {
     port: parseInt(process.env.PORT || "3000", 10),
   };
 }
+
+export const config = getEnvConfig();

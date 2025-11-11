@@ -1,5 +1,5 @@
 import { WebClient } from "@slack/web-api";
-import pRetry from "p-retry";
+import retry from "retry";
 import logger from "../logger";
 
 export interface SlackImageBlob {
@@ -17,6 +17,42 @@ export interface SlackMessage {
 }
 
 /**
+ * Helper function to wrap async operations with retry logic
+ */
+async function retryOperation<T>(
+  fn: () => Promise<T>,
+  options: {
+    retries: number;
+    onFailedAttempt?: (error: Error, attempt: number) => void;
+  }
+): Promise<T> {
+  const operation = retry.operation({
+    retries: options.retries,
+    factor: 2,
+    minTimeout: 1000,
+    maxTimeout: 5000,
+    randomize: true,
+  });
+
+  return new Promise<T>((resolve, reject) => {
+    operation.attempt(async (currentAttempt) => {
+      try {
+        const result = await fn();
+        resolve(result);
+      } catch (error) {
+        if (options.onFailedAttempt) {
+          options.onFailedAttempt(error as Error, currentAttempt);
+        }
+
+        if (!operation.retry(error as Error)) {
+          reject(operation.mainError());
+        }
+      }
+    });
+  });
+}
+
+/**
  * Service for interacting with Slack API
  */
 export class SlackService {
@@ -31,12 +67,12 @@ export class SlackService {
    * Initializes the service by fetching bot user information
    */
   async initialize(): Promise<void> {
-    const authResult = await pRetry(() => this.client.auth.test(), {
+    const authResult = await retryOperation(() => this.client.auth.test(), {
       retries: 3,
-      onFailedAttempt: (error) => {
+      onFailedAttempt: (error, attempt) => {
         logger.warn("Slack auth.test failed, retrying...", {
-          attempt: error.attemptNumber,
-          retriesLeft: error.retriesLeft,
+          attempt,
+          error: error.message,
         });
       },
     });
@@ -64,15 +100,15 @@ export class SlackService {
     userId: string
   ): Promise<{ id: string; name: string; realName: string } | null> {
     try {
-      const result = await pRetry(
+      const result = await retryOperation(
         () => this.client.users.info({ user: userId }),
         {
           retries: 3,
-          onFailedAttempt: (error) => {
+          onFailedAttempt: (error, attempt) => {
             logger.warn("Slack users.info failed, retrying...", {
               userId,
-              attempt: error.attemptNumber,
-              retriesLeft: error.retriesLeft,
+              attempt,
+              error: error.message,
             });
           },
         }
@@ -136,16 +172,16 @@ export class SlackService {
   ): Promise<SlackMessage[]> {
     logger.info("Fetching thread messages", { channel, threadTs });
 
-    const result = await pRetry(
+    const result = await retryOperation(
       () => this.client.conversations.replies({ channel, ts: threadTs }),
       {
         retries: 3,
-        onFailedAttempt: (error) => {
+        onFailedAttempt: (error, attempt) => {
           logger.warn("Slack conversations.replies failed, retrying...", {
             channel,
             threadTs,
-            attempt: error.attemptNumber,
-            retriesLeft: error.retriesLeft,
+            attempt,
+            error: error.message,
           });
         },
       }
@@ -165,7 +201,6 @@ export class SlackService {
         ts: msg.ts || "",
       };
 
-      // Fetch images if present
       if (msg.files && msg.files.length > 0) {
         const imageBlobs: SlackImageBlob[] = [];
 
@@ -245,13 +280,13 @@ export class SlackService {
       return response.blob();
     };
 
-    return await pRetry(fetchImage, {
+    return await retryOperation(fetchImage, {
       retries: 3,
-      onFailedAttempt: (error) => {
+      onFailedAttempt: (error, attempt) => {
         logger.warn("Slack image fetch failed, retrying...", {
           url: url.substring(0, 50),
-          attempt: error.attemptNumber,
-          retriesLeft: error.retriesLeft,
+          attempt,
+          error: error.message,
         });
       },
     });
@@ -268,7 +303,7 @@ export class SlackService {
     text: string,
     threadTs?: string
   ): Promise<void> {
-    await pRetry(
+    await retryOperation(
       () =>
         this.client.chat.postMessage({
           channel,
@@ -277,11 +312,11 @@ export class SlackService {
         }),
       {
         retries: 3,
-        onFailedAttempt: (error) => {
+        onFailedAttempt: (error, attempt) => {
           logger.warn("Slack chat.postMessage failed, retrying...", {
             channel,
-            attempt: error.attemptNumber,
-            retriesLeft: error.retriesLeft,
+            attempt,
+            error: error.message,
           });
         },
       }
