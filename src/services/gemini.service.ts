@@ -51,7 +51,10 @@ export class GeminiService {
       () =>
         this.ai.models.generateContent({
           model: this.modelName,
-          contents: [systemPrompt, ...parts],
+          contents: parts,
+          config: {
+            systemInstruction: systemPrompt,
+          },
         }),
       {
         retries: 5,
