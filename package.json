@@ -23,6 +23,7 @@
   "author": "Osama Adam <osamaadamme@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.929.0",
     "@google/genai": "^1.29.0",
     "@slack/bolt": "^3.17.1",
     "dotenv": "^16.4.5",
