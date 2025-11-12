@@ -4,19 +4,51 @@ provider:
   name: aws
   runtime: nodejs20.x
   region: ${opt:region, 'eu-central-1'}
-  memorySize: 512
-  timeout: 300
+  iam:
+    role:
+      statements:
+      - Effect: Allow
+        Action:
+        - sqs:SendMessage
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+        - sqs:GetQueueAttributes
+        Resource:
+        - !GetAtt SlackEventsQueue.Arn
   environment:
     SLACK_BOT_TOKEN: ${env:SLACK_BOT_TOKEN}
     SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET}
     GEMINI_API_KEY: ${env:GEMINI_API_KEY}
     GEMINI_MODEL: ${env:GEMINI_MODEL, 'gemini-2.5-flash'}
+    EVENTS_QUEUE_URL: !Ref SlackEventsQueue
     NODE_ENV: production
 
 functions:
-  slack_garcon:
-    handler: dist/lambda.handler
+  # Receiver - responds to Slack immediately
+  slack_receiver:
+    handler: dist/lambda-receiver.handler
     url: true
+    timeout: 10
+    memorySize: 128
+
+  # Processor - handles events from queue
+  slack_processor:
+    handler: dist/lambda-processor.handler
+    timeout: 300
+    memorySize: 256
+    events:
+    - sqs:
+        arn: !GetAtt SlackEventsQueue.Arn
+        batchSize: 1
+
+resources:
+  Resources:
+    SlackEventsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: garcon-slack-events-${sls:stage}
+        VisibilityTimeout: 360 # 6 minutes (longer than Lambda timeout)
+        MessageRetentionPeriod: 3600 # 1 hour
 
 package:
   patterns:

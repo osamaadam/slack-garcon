@@ -127,6 +127,7 @@ You need an IAM user with the following permissions:
 - `CloudFormationFullAccess` (Serverless uses CloudFormation)
 - `AmazonAPIGatewayAdministrator` (for Function URLs)
 - `CloudWatchLogsFullAccess` (for logging)
+- `AmazonSQSFullAccess` (for event queue management)
 
 Create an IAM user in AWS Console:
 
@@ -148,11 +149,17 @@ export GEMINI_MODEL=gemini-2.5-pro
 npx serverless deploy
 ```
 
-After deployment, you'll get a Function URL. Copy this URL and:
+After deployment, you'll get a Function URL for `slack_receiver`. Copy this URL and:
 
 1. Go to your Slack App settings
 2. Under "Event Subscriptions", paste the URL in "Request URL"
 3. Slack will verify the endpoint automatically
+
+**How it works:**
+
+- The receiver Lambda validates requests and queues events to SQS (responds in <100ms)
+- The processor Lambda handles events from the queue asynchronously (has 5 minutes)
+- This prevents Slack retries and ensures reliable message processing
 
 #### Automatic Deployment with GitHub Actions
 
