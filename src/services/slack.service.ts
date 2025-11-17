@@ -1,5 +1,4 @@
 import { WebClient } from "@slack/web-api";
-import retry from "retry";
 import logger from "../logger";
 
 export interface SlackImageBlob {
@@ -16,41 +15,8 @@ export interface SlackMessage {
   images?: SlackImageBlob[];
 }
 
-/**
- * Helper function to wrap async operations with retry logic
- */
-async function retryOperation<T>(
-  fn: () => Promise<T>,
-  options: {
-    retries: number;
-    onFailedAttempt?: (error: Error, attempt: number) => void;
-  }
-): Promise<T> {
-  const operation = retry.operation({
-    retries: options.retries,
-    factor: 2,
-    minTimeout: 1000,
-    maxTimeout: 5000,
-    randomize: true,
-  });
-
-  return new Promise<T>((resolve, reject) => {
-    operation.attempt(async (currentAttempt) => {
-      try {
-        const result = await fn();
-        resolve(result);
-      } catch (error) {
-        if (options.onFailedAttempt) {
-          options.onFailedAttempt(error as Error, currentAttempt);
-        }
-
-        if (!operation.retry(error as Error)) {
-          reject(operation.mainError());
-        }
-      }
-    });
-  });
-}
+// No in-process retry logic: rely on SQS redelivery instead. Keep calls simple and
+// let errors bubble so the processor Lambda can fail fast and SQS will retry.
 
 /**
  * Service for interacting with Slack API
@@ -67,16 +33,13 @@ export class SlackService {
    * Initializes the service by fetching bot user information
    */
   async initialize(): Promise<void> {
-    const authResult = await retryOperation(() => this.client.auth.test(), {
-      retries: 3,
-      onFailedAttempt: (error, attempt) => {
-        logger.warn("Slack auth.test failed, retrying...", {
-          attempt,
-          error: error.message,
-        });
-      },
-    });
-    this.botUserId = authResult.user_id as string;
+    try {
+      const authResult = await this.client.auth.test();
+      this.botUserId = authResult.user_id as string;
+    } catch (error) {
+      logger.error("Slack auth.test failed", { error });
+      throw error;
+    }
   }
 
   /**
@@ -100,19 +63,7 @@ export class SlackService {
     userId: string
   ): Promise<{ id: string; name: string; realName: string } | null> {
     try {
-      const result = await retryOperation(
-        () => this.client.users.info({ user: userId }),
-        {
-          retries: 3,
-          onFailedAttempt: (error, attempt) => {
-            logger.warn("Slack users.info failed, retrying...", {
-              userId,
-              attempt,
-              error: error.message,
-            });
-          },
-        }
-      );
+      const result = await this.client.users.info({ user: userId });
 
       if (result.user) {
         return {
@@ -172,20 +123,10 @@ export class SlackService {
   ): Promise<SlackMessage[]> {
     logger.info("Fetching thread messages", { channel, threadTs });
 
-    const result = await retryOperation(
-      () => this.client.conversations.replies({ channel, ts: threadTs }),
-      {
-        retries: 3,
-        onFailedAttempt: (error, attempt) => {
-          logger.warn("Slack conversations.replies failed, retrying...", {
-            channel,
-            threadTs,
-            attempt,
-            error: error.message,
-          });
-        },
-      }
-    );
+    const result = await this.client.conversations.replies({
+      channel,
+      ts: threadTs,
+    });
 
     if (!result.messages) {
       logger.warn("No messages found in thread", { channel, threadTs });
@@ -266,30 +207,17 @@ export class SlackService {
    * @returns Blob containing the image data
    */
   private async fetchImageAsBlob(url: string): Promise<Blob> {
-    const fetchImage = async (): Promise<Blob> => {
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${this.client.token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.statusText}`);
-      }
-
-      return response.blob();
-    };
-
-    return await retryOperation(fetchImage, {
-      retries: 3,
-      onFailedAttempt: (error, attempt) => {
-        logger.warn("Slack image fetch failed, retrying...", {
-          url: url.substring(0, 50),
-          attempt,
-          error: error.message,
-        });
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${this.client.token}`,
       },
     });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+
+    return response.blob();
   }
 
   /**
@@ -303,23 +231,10 @@ export class SlackService {
     text: string,
     threadTs?: string
   ): Promise<void> {
-    await retryOperation(
-      () =>
-        this.client.chat.postMessage({
-          channel,
-          text,
-          thread_ts: threadTs,
-        }),
-      {
-        retries: 3,
-        onFailedAttempt: (error, attempt) => {
-          logger.warn("Slack chat.postMessage failed, retrying...", {
-            channel,
-            attempt,
-            error: error.message,
-          });
-        },
-      }
-    );
+    await this.client.chat.postMessage({
+      channel,
+      text,
+      thread_ts: threadTs,
+    });
   }
 }

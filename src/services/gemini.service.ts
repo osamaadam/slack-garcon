@@ -1,7 +1,6 @@
 import { GoogleGenAI, Part } from "@google/genai";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import retry from "retry";
 import logger from "../logger";
 
 export interface Base64Image {
@@ -47,39 +46,19 @@ export class GeminiService {
       textParts: totalParts - imageParts,
     });
 
-    const operation = retry.operation({
-      retries: 5,
-      factor: 3,
-      minTimeout: 5000,
-      maxTimeout: 60000,
-      randomize: true,
-    });
-
-    const result = await new Promise<
-      Awaited<ReturnType<typeof this.ai.models.generateContent>>
-    >((resolve, reject) => {
-      operation.attempt(async (currentAttempt) => {
-        try {
-          const res = await this.ai.models.generateContent({
-            model: this.modelName,
-            contents: parts,
-            config: {
-              systemInstruction: systemPrompt,
-            },
-          });
-          resolve(res);
-        } catch (error) {
-          logger.warn("Gemini API request failed, retrying...", {
-            attempt: currentAttempt,
-            retriesLeft: operation.attempts(),
-          });
-
-          if (!operation.retry(error as Error)) {
-            reject(operation.mainError());
-          }
-        }
+    let result: Awaited<ReturnType<typeof this.ai.models.generateContent>>;
+    try {
+      result = await this.ai.models.generateContent({
+        model: this.modelName,
+        contents: parts,
+        config: {
+          systemInstruction: systemPrompt,
+        },
       });
-    });
+    } catch (error) {
+      logger.error("Gemini API request failed", { error });
+      throw error;
+    }
 
     const text = result.text ?? "";
 
