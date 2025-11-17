@@ -104,6 +104,7 @@ export class EventHandlerService {
           postError,
         });
       }
+      throw error;
     }
   }
 }
