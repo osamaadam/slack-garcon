@@ -49,6 +49,15 @@ resources:
         QueueName: garcon-slack-events-${sls:stage}
         VisibilityTimeout: 360 # 6 minutes (longer than Lambda timeout)
         MessageRetentionPeriod: 3600 # 1 hour
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt SlackEventsDlq.Arn
+          maxReceiveCount: 3
+
+    SlackEventsDlq:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: garcon-slack-events-dlq-${sls:stage}
+        MessageRetentionPeriod: 1209600
 
 package:
   patterns:
