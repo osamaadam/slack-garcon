@@ -2,7 +2,7 @@ service: garcon-bot
 
 provider:
   name: aws
-  runtime: nodejs20.x
+  runtime: nodejs22.x
   region: ${opt:region, 'eu-central-1'}
   iam:
     role:
