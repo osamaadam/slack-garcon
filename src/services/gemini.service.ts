@@ -16,16 +16,32 @@ export interface Message {
 }
 
 /**
+ * Minimal typed shape for errors returned by the GenAI SDK or HTTP layer.
+ */
+interface ModelError {
+  code?: string | number;
+  status?: number | string;
+  response?: { status?: number };
+  message?: string;
+}
+
+/**
  * Service for interacting with Gemini AI
  */
 export class GeminiService {
   private ai: GoogleGenAI;
   private modelName: string;
   private systemPrompt?: string;
+  private fallbackModels: string[];
 
   constructor(apiKey: string, modelName: string) {
     this.ai = new GoogleGenAI({ apiKey });
     this.modelName = modelName;
+    // Optional comma-separated fallback models from env var
+    this.fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   }
 
   /**
@@ -46,28 +62,67 @@ export class GeminiService {
       textParts: totalParts - imageParts,
     });
 
-    let result: Awaited<ReturnType<typeof this.ai.models.generateContent>>;
-    try {
-      result = await this.ai.models.generateContent({
-        model: this.modelName,
-        contents: parts,
-        config: {
-          systemInstruction: systemPrompt,
-        },
-      });
-    } catch (error) {
-      logger.error("Gemini API request failed", { error });
-      throw error;
+    const modelsToTry = [this.modelName, ...this.fallbackModels];
+
+    function isTransientModelError(err: unknown): boolean {
+      if (!err) return false;
+      const e = err as ModelError;
+      // Only treat explicit HTTP 503 (Service Unavailable) as transient.
+      if (e.response && typeof e.response.status === "number") {
+        return e.response.status === 503;
+      }
+      if (typeof e.status === "number") return e.status === 503;
+      if (typeof e.code === "number") return e.code === 503;
+      if (typeof e.code === "string") return e.code === "503";
+      return false;
     }
 
-    const text = result.text ?? "";
+    let lastError: unknown = null;
+    for (const model of modelsToTry) {
+      try {
+        logger.info("Attempting Gemini model", { model });
+        const res = await this.ai.models.generateContent({
+          model,
+          contents: parts,
+          config: {
+            systemInstruction: systemPrompt,
+          },
+        });
+        const text = res.text ?? "";
+        logger.debug("Gemini response received", {
+          responseLength: text.length,
+          responsePreview: text.substring(0, 300),
+          usedModel: model,
+        });
+        return text;
+      } catch (err) {
+        lastError = err;
+        logger.warn("Gemini model failed", { model, error: err });
+        if (!isTransientModelError(err)) {
+          // Non-transient: don't attempt other models
+          logger.error("Gemini failure is non-transient; aborting", {
+            model,
+            error: err,
+          });
+          throw err;
+        }
 
-    logger.debug("Gemini response received", {
-      responseLength: text.length,
-      responsePreview: text.substring(0, 300),
+        // transient -> try next model immediately (no backoff to avoid extra Lambda time/cost)
+        logger.info(
+          "Transient Gemini error (503); trying next model immediately",
+          {
+            model,
+          }
+        );
+        continue;
+      }
+    }
+
+    logger.error("All Gemini models failed", {
+      modelsTried: modelsToTry,
+      lastError,
     });
-
-    return text;
+    throw lastError;
   }
 
   /**
