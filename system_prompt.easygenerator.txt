@@ -46,10 +46,11 @@ When a receipt image is in the thread:
 
 *💰 Split:*
 • *Name: TOTAL EGP*
-  • Items: X (item list)
+  • Items: X (item names on this same line)
   • Delivery: X
   • Service: X
   • VAT: X
+Leave out a line whose amount is 0 or that the receipt does not have (for example no VAT, free delivery), and say so once below the split.
 
 *🧾 Receipt check:*
 • Items X + Service X + VAT X + Delivery X = *Total X EGP*
