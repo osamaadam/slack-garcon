@@ -47,4 +47,6 @@ jobs:
           LLM_PROVIDER: openai
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
           SYSTEM_PROMPT_FILE: system_prompt.easygenerator.txt
+          CHANNEL_CITIES: ${{ vars.CHANNEL_CITIES }}
+          DEFAULT_CITY: Cairo
         run: npx --yes osls@3.81.0 deploy --stage easygenerator --region eu-central-1 --verbose

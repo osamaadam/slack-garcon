@@ -34,6 +34,12 @@ export interface GarconReply {
     paid_by: string | null;
     pays_for: { payer: string; for_person: string }[];
   } | null;
+  menu_source: {
+    kind: "talabat" | "web" | "guess";
+    restaurant: string;
+    branch: string;
+    url: string;
+  } | null;
   notes: string[];
 }
 
@@ -51,7 +57,7 @@ const item = {
 export const replySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["intro", "outro", "kind", "orders", "receipt", "notes"],
+  required: ["intro", "outro", "kind", "orders", "receipt", "menu_source", "notes"],
   properties: {
     intro: { type: "string" },
     outro: { type: "string" },
@@ -126,6 +132,17 @@ export const replySchema = {
             },
           },
         },
+      },
+    },
+    menu_source: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      required: ["kind", "restaurant", "branch", "url"],
+      properties: {
+        kind: { type: "string", enum: ["talabat", "web", "guess"] },
+        restaurant: { type: "string" },
+        branch: { type: "string" },
+        url: { type: "string" },
       },
     },
     notes: { type: "array", items: { type: "string" } },

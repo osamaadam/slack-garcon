@@ -12,6 +12,8 @@ export interface EnvConfig {
   openaiApiKey: string;
   openaiModel: string;
   openaiReasoningEffort?: "low" | "medium" | "high";
+  channelCities: Record<string, string>;
+  defaultCity: string;
   port: number;
 }
 
@@ -47,6 +49,9 @@ export function getEnvConfig(): EnvConfig {
     openaiModel: process.env.OPENAI_MODEL || "gpt-6-luna",
     openaiReasoningEffort: (process.env.OPENAI_REASONING_EFFORT ||
       undefined) as EnvConfig["openaiReasoningEffort"],
+    // e.g. {"C0CJVTCQYLR":"Alexandria"}; channels not listed use DEFAULT_CITY.
+    channelCities: JSON.parse(process.env.CHANNEL_CITIES || "{}"),
+    defaultCity: process.env.DEFAULT_CITY || "Cairo",
     port: parseInt(process.env.PORT || "3000", 10),
   };
 }

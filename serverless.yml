@@ -15,6 +15,12 @@ provider:
         - sqs:GetQueueAttributes
         Resource:
         - !GetAtt SlackEventsQueue.Arn
+      - Effect: Allow
+        Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        Resource:
+        - !GetAtt StateTable.Arn
   environment:
     SLACK_BOT_TOKEN: ${env:SLACK_BOT_TOKEN}
     SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET}
@@ -26,6 +32,9 @@ provider:
     OPENAI_MODEL: ${env:OPENAI_MODEL, ''}
     OPENAI_REASONING_EFFORT: ${env:OPENAI_REASONING_EFFORT, ''}
     SYSTEM_PROMPT_FILE: ${env:SYSTEM_PROMPT_FILE, 'system_prompt.txt'}
+    CHANNEL_CITIES: ${env:CHANNEL_CITIES, '{}'}
+    DEFAULT_CITY: ${env:DEFAULT_CITY, 'Cairo'}
+    STATE_TABLE: !Ref StateTable
     EVENTS_QUEUE_URL: !Ref SlackEventsQueue
     NODE_ENV: production
 
@@ -58,6 +67,22 @@ resources:
         RedrivePolicy:
           deadLetterTargetArn: !GetAtt SlackEventsDlq.Arn
           maxReceiveCount: 3
+
+    # Menu cache (24 h TTL) and each channel's recent restaurants.
+    StateTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: garcon-state-${sls:stage}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
 
     SlackEventsDlq:
       Type: AWS::SQS::Queue

@@ -1,4 +1,5 @@
 import { AppMentionEvent } from "@slack/bolt";
+import { config } from "../config";
 import logger from "../logger";
 import { Message } from "./gemini.service";
 import { LlmService } from "./llm";
@@ -71,9 +72,10 @@ export class EventHandlerService {
         conversationLength: llmMessages.length,
       });
 
-      const response = await this.llmService.generateResponse(
-        llmMessages
-      );
+      const response = await this.llmService.generateResponse(llmMessages, {
+        channel,
+        city: config.channelCities[channel] ?? config.defaultCity,
+      });
 
       logger.info("LLM response received", {
         requestId,

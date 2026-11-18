@@ -99,7 +99,13 @@ function splitMd(reply: GarconReply): string[] {
   if (receipt.paid_by) lines.push(`💸 **${receipt.paid_by}** دفع الفاتورة، الكل يحوّل له نصيبه.`);
 
   if (estimate) {
-    lines.push("⚠️ ده تقدير بأسعار تقريبية، الإيصال الحقيقي هو اللي يحكم.");
+    const src = reply.menu_source;
+    const where = src ? `${src.restaurant}${src.branch && src.branch !== src.restaurant ? ` (${src.branch})` : ""}` : "";
+    const link = src?.url ? `[${where}](${src.url})` : where;
+    if (src?.kind === "talabat") lines.push(`📖 الأسعار من منيو طلبات: ${link}`);
+    else if (src?.kind === "web") lines.push(`🌐 الأسعار من النت ومش مؤكدة: ${link}`);
+    else lines.push("🤷 مش لاقي المنيو، دي أسعار تقريبية من خبرة العمدة.");
+    lines.push("⚠️ ده تقدير، الإيصال الحقيقي هو اللي يحكم.");
   } else {
     const ok = Math.abs(split.sum - receipt.total) < 0.01;
     lines.push(
