@@ -33,6 +33,7 @@ export class EventHandlerService {
 
       const { channel, thread_ts, ts } = event;
       const threadTs = thread_ts || ts;
+      await this.slackService.setLoadingStatus(channel, threadTs);
 
       logger.info("Fetching thread messages", { requestId, channel, threadTs });
       const slackMessages = await this.slackService.fetchThreadMessages(

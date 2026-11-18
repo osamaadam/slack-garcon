@@ -237,4 +237,25 @@ export class SlackService {
       thread_ts: threadTs,
     });
   }
+
+  // Slack clears this when our reply lands (or after 2 minutes). It is
+  // cosmetic, so a failure must never stop the reply itself.
+  async setLoadingStatus(channel: string, threadTs: string): Promise<void> {
+    try {
+      // web-api v6 has no typed method for this, so call it by name.
+      await this.client.apiCall("assistant.threads.setStatus", {
+        channel_id: channel,
+        thread_ts: threadTs,
+        status: "is on it...",
+        loading_messages: [
+          "بيقرا الطلبات...",
+          "is reading the receipt...",
+          "بيحسب مين عليه كام...",
+          "is double-checking the math...",
+        ],
+      });
+    } catch (error) {
+      logger.warn("Could not set loading status", { channel, error });
+    }
+  }
 }
