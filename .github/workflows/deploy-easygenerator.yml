@@ -1,0 +1,50 @@
+name: Deploy Easygenerator stack
+on:
+  push:
+    branches:
+      - easygenerator
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits instead of racing CloudFormation.
+concurrency:
+  group: deploy-easygenerator
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: easygenerator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - run: npm ci
+
+      - run: npm run build
+
+      # OIDC into the Easygenerator sandbox account; the role trusts only this
+      # repo's "easygenerator" environment, so no AWS keys are stored here.
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      # osls is the open-source Serverless v3; v4 would need a licence key.
+      - name: Deploy
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LLM_PROVIDER: openai
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          SYSTEM_PROMPT_FILE: system_prompt.easygenerator.txt
+        run: npx --yes osls@3.81.0 deploy --stage easygenerator --region eu-central-1 --verbose
