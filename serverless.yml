@@ -18,9 +18,14 @@ provider:
   environment:
     SLACK_BOT_TOKEN: ${env:SLACK_BOT_TOKEN}
     SLACK_SIGNING_SECRET: ${env:SLACK_SIGNING_SECRET}
-    GEMINI_API_KEY: ${env:GEMINI_API_KEY}
-    GEMINI_MODEL: ${env:GEMINI_MODEL}
-    GEMINI_FALLBACK_MODELS: ${env:GEMINI_FALLBACK_MODELS}
+    LLM_PROVIDER: ${env:LLM_PROVIDER, 'gemini'}
+    GEMINI_API_KEY: ${env:GEMINI_API_KEY, ''}
+    GEMINI_MODEL: ${env:GEMINI_MODEL, ''}
+    GEMINI_FALLBACK_MODELS: ${env:GEMINI_FALLBACK_MODELS, ''}
+    OPENAI_API_KEY: ${env:OPENAI_API_KEY, ''}
+    OPENAI_MODEL: ${env:OPENAI_MODEL, ''}
+    OPENAI_REASONING_EFFORT: ${env:OPENAI_REASONING_EFFORT, ''}
+    SYSTEM_PROMPT_FILE: ${env:SYSTEM_PROMPT_FILE, 'system_prompt.txt'}
     EVENTS_QUEUE_URL: !Ref SlackEventsQueue
     NODE_ENV: production
 
@@ -63,7 +68,7 @@ resources:
 package:
   patterns:
   - "dist/**"
-  - "system_prompt.txt"
+  - "system_prompt*.txt"
   - "!.git/**"
   - "!.github/**"
   - "!.vscode/**"

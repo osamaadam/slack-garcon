@@ -1,6 +1,7 @@
 import { AppMentionEvent } from "@slack/bolt";
 import logger from "../logger";
-import { GeminiService, Message } from "./gemini.service";
+import { Message } from "./gemini.service";
+import { LlmService } from "./llm";
 import { ImageProcessingService } from "./image-processing.service";
 import { SlackService } from "./slack.service";
 
@@ -11,7 +12,7 @@ import { SlackService } from "./slack.service";
 export class EventHandlerService {
   constructor(
     private slackService: SlackService,
-    private geminiService: GeminiService,
+    private llmService: LlmService,
     private imageProcessingService: ImageProcessingService
   ) {}
 
@@ -45,10 +46,10 @@ export class EventHandlerService {
       });
 
       const botUserId = this.slackService.getBotUserId();
-      const geminiMessages: Message[] = [];
+      const llmMessages: Message[] = [];
 
       for (const msg of slackMessages) {
-        const geminiMessage: Message = {
+        const llmMessage: Message = {
           role: msg.user === botUserId ? "model" : "user",
           content: msg.text,
           userName: msg.userName,
@@ -57,22 +58,22 @@ export class EventHandlerService {
         if (msg.images && msg.images.length > 0) {
           const base64Images =
             await this.imageProcessingService.convertBlobsToBase64(msg.images);
-          geminiMessage.images = base64Images;
+          llmMessage.images = base64Images;
         }
 
-        geminiMessages.push(geminiMessage);
+        llmMessages.push(llmMessage);
       }
 
-      logger.info("Sending to Gemini", {
+      logger.info("Sending to LLM", {
         requestId,
-        conversationLength: geminiMessages.length,
+        conversationLength: llmMessages.length,
       });
 
-      const response = await this.geminiService.generateResponse(
-        geminiMessages
+      const response = await this.llmService.generateResponse(
+        llmMessages
       );
 
-      logger.info("Gemini response received", {
+      logger.info("LLM response received", {
         requestId,
         responseLength: response.length,
       });

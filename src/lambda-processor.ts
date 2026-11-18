@@ -1,20 +1,17 @@
 import { SQSHandler } from "aws-lambda";
-import { GeminiService } from "./services/gemini.service";
+import { createLlmService } from "./services/llm";
 import { SlackService } from "./services/slack.service";
 import { ImageProcessingService } from "./services/image-processing.service";
 import { EventHandlerService } from "./services/event-handler.service";
 import { config } from "./config";
 
 const slackService = new SlackService(config.slackBotToken);
-const geminiService = new GeminiService(
-  config.geminiApiKey,
-  config.geminiModel
-);
+const llmService = createLlmService(config);
 const imageProcessingService = new ImageProcessingService();
 
 const eventHandlerService = new EventHandlerService(
   slackService,
-  geminiService,
+  llmService,
   imageProcessingService
 );
 

@@ -9,13 +9,7 @@ async function main(): Promise<void> {
   try {
     const config = getEnvConfig();
 
-    const bot = new GarconBot(
-      config.slackBotToken,
-      config.slackAppToken,
-      config.slackSigningSecret,
-      config.geminiApiKey,
-      config.geminiModel
-    );
+    const bot = new GarconBot(config);
 
     await bot.start(config.port);
 

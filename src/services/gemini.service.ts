@@ -1,7 +1,6 @@
 import { GoogleGenAI, Part } from "@google/genai";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import logger from "../logger";
+import { loadSystemPrompt } from "./system-prompt";
 
 export interface Base64Image {
   data: string;
@@ -31,7 +30,6 @@ interface ModelError {
 export class GeminiService {
   private ai: GoogleGenAI;
   private modelName: string;
-  private systemPrompt?: string;
   private fallbackModels: string[];
 
   constructor(apiKey: string, modelName: string) {
@@ -50,7 +48,7 @@ export class GeminiService {
    * @returns Promise resolving to the AI-generated response
    */
   async generateResponse(messages: Message[]): Promise<string> {
-    const systemPrompt = await this.getSystemPrompt();
+    const systemPrompt = await loadSystemPrompt();
     const parts = await this.buildContentParts(messages);
 
     const totalParts = parts.length;
@@ -155,19 +153,5 @@ export class GeminiService {
     }
 
     return parts;
-  }
-
-  /**
-   * Gets or loads the system prompt
-   * @returns System prompt string
-   */
-  private async getSystemPrompt(): Promise<string> {
-    if (!this.systemPrompt) {
-      this.systemPrompt = await readFile(
-        join(__dirname, "..", "..", "system_prompt.txt"),
-        "utf-8"
-      );
-    }
-    return this.systemPrompt;
   }
 }

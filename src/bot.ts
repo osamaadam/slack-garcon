@@ -1,6 +1,7 @@
 import { App } from "@slack/bolt";
 import logger from "./logger";
-import { GeminiService } from "./services/gemini.service";
+import { EnvConfig } from "./config";
+import { createLlmService } from "./services/llm";
 import { ImageProcessingService } from "./services/image-processing.service";
 import { SlackService } from "./services/slack.service";
 import { EventHandlerService } from "./services/event-handler.service";
@@ -13,27 +14,21 @@ export class GarconBot {
   private eventHandlerService: EventHandlerService;
   private slackService: SlackService;
 
-  constructor(
-    slackBotToken: string,
-    slackAppToken: string,
-    slackSigningSecret: string,
-    geminiApiKey: string,
-    geminiModel: string
-  ) {
+  constructor(config: EnvConfig) {
     this.app = new App({
-      token: slackBotToken,
-      appToken: slackAppToken,
-      signingSecret: slackSigningSecret,
+      token: config.slackBotToken,
+      appToken: config.slackAppToken,
+      signingSecret: config.slackSigningSecret,
       socketMode: true,
     });
 
-    this.slackService = new SlackService(slackBotToken);
+    this.slackService = new SlackService(config.slackBotToken);
     const imageProcessingService = new ImageProcessingService();
-    const geminiService = new GeminiService(geminiApiKey, geminiModel);
+    const llmService = createLlmService(config);
 
     this.eventHandlerService = new EventHandlerService(
       this.slackService,
-      geminiService,
+      llmService,
       imageProcessingService
     );
 
