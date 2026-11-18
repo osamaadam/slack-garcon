@@ -6,6 +6,7 @@ import type {
 import logger from "../logger";
 import { Message } from "./gemini.service";
 import { loadSystemPrompt } from "./system-prompt";
+import { GarconReply, replySchema } from "./reply";
 
 type ReasoningEffort = "low" | "medium" | "high";
 
@@ -20,7 +21,7 @@ export class OpenAiService {
     this.client = new OpenAI({ apiKey });
   }
 
-  async generateResponse(messages: Message[]): Promise<string> {
+  async generateResponse(messages: Message[]): Promise<GarconReply> {
     const instructions = await loadSystemPrompt();
     const input = messages.map(toInputItem);
 
@@ -34,6 +35,9 @@ export class OpenAiService {
       model: this.model,
       instructions,
       input,
+      text: {
+        format: { type: "json_schema", name: "garcon_reply", strict: true, schema: replySchema },
+      },
       ...(this.reasoningEffort && {
         reasoning: { effort: this.reasoningEffort },
       }),
@@ -43,7 +47,7 @@ export class OpenAiService {
       model: this.model,
       usage: res.usage,
     });
-    return res.output_text;
+    return JSON.parse(res.output_text) as GarconReply;
   }
 }
 

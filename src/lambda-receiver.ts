@@ -22,6 +22,26 @@ app.event("app_mention", async ({ event }) => {
   });
 });
 
+// The thumbs under each reply; logged so we can find bad answers in CloudWatch.
+app.action("garcon_feedback", async ({ ack, body, action }) => {
+  await ack();
+  const b = body as unknown as {
+    user?: { id?: string };
+    channel?: { id?: string };
+    message?: { ts?: string; thread_ts?: string };
+  };
+  console.log(
+    JSON.stringify({
+      msg: "Garcon feedback",
+      value: (action as { value?: string }).value,
+      user: b.user?.id,
+      channel: b.channel?.id,
+      messageTs: b.message?.ts,
+      threadTs: b.message?.thread_ts,
+    })
+  );
+});
+
 export const handler: APIGatewayProxyHandler = async (
   event,
   context,

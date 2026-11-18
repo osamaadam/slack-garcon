@@ -229,12 +229,15 @@ export class SlackService {
   async postMessage(
     channel: string,
     text: string,
-    threadTs?: string
+    threadTs?: string,
+    blocks?: Record<string, unknown>[]
   ): Promise<void> {
     await this.client.chat.postMessage({
       channel,
       text,
       thread_ts: threadTs,
+      // web-api v6 types predate the markdown and context_actions blocks.
+      ...(blocks && { blocks: blocks as never }),
     });
   }
 

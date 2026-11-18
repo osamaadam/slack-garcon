@@ -2,6 +2,7 @@ import { AppMentionEvent } from "@slack/bolt";
 import logger from "../logger";
 import { Message } from "./gemini.service";
 import { LlmService } from "./llm";
+import { renderReply } from "./render";
 import { ImageProcessingService } from "./image-processing.service";
 import { SlackService } from "./slack.service";
 
@@ -76,7 +77,7 @@ export class EventHandlerService {
 
       logger.info("LLM response received", {
         requestId,
-        responseLength: response.length,
+        kind: typeof response === "string" ? "text" : response.kind,
       });
 
       logger.info("Posting response to Slack", {
@@ -84,7 +85,12 @@ export class EventHandlerService {
         channel,
         threadTs,
       });
-      await this.slackService.postMessage(channel, response, threadTs);
+      if (typeof response === "string") {
+        await this.slackService.postMessage(channel, response, threadTs);
+      } else {
+        const { text, blocks } = renderReply(response);
+        await this.slackService.postMessage(channel, text, threadTs, blocks);
+      }
 
       logger.info("Request completed successfully", { requestId });
     } catch (error) {
