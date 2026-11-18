@@ -24,6 +24,7 @@ export interface Fee {
 
 export interface GarconReply {
   intro: string;
+  outro: string;
   kind: "orders" | "split" | "estimate" | "chat";
   orders: { person: string; items: ReplyItem[] }[];
   receipt: {
@@ -50,9 +51,10 @@ const item = {
 export const replySchema = {
   type: "object",
   additionalProperties: false,
-  required: ["intro", "kind", "orders", "receipt", "notes"],
+  required: ["intro", "outro", "kind", "orders", "receipt", "notes"],
   properties: {
     intro: { type: "string" },
+    outro: { type: "string" },
     kind: { type: "string", enum: ["orders", "split", "estimate", "chat"] },
     orders: {
       type: "array",

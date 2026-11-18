@@ -59,24 +59,32 @@ function splitMd(reply: GarconReply): string[] {
   const split = computeSplit(receipt);
   const estimate = reply.kind === "estimate";
 
+  // A person's share of a line, priced by how many of its units they took.
   const itemsOf = (person: string) =>
-    receipt.lines.flatMap((l) =>
-      l.shares.filter((s) => s.person === person).map((s) => `${qty(s.qty)} × ${l.item_ar}`)
-    );
+    receipt.lines.flatMap((l) => {
+      const units = l.shares.reduce((n, s) => n + s.qty, 0) || 1;
+      return l.shares
+        .filter((s) => s.person === person)
+        .map((s) => ({ label: `${qty(s.qty)} × ${l.item_ar}`, price: (l.amount * s.qty) / units }));
+    });
+
+  const blank = (n: number) => Array<string>(n).fill("");
+  const rows = split.people.flatMap((p) => {
+    const name = p.coveredBy ? `${p.person} (على ${p.coveredBy})` : p.person;
+    const items = itemsOf(p.person);
+    const sums = [...p.fees.map(money), `**${money(p.total)}**`];
+    if (items.length <= 1) {
+      return [[name, items[0]?.label ?? "", money(p.items), ...sums]];
+    }
+    return [
+      ...items.map((it, i) => [i === 0 ? name : "", it.label, money(it.price), ...blank(sums.length)]),
+      ["", "**المجموع**", `**${money(p.items)}**`, ...sums],
+    ];
+  });
 
   const out = [
     estimate ? "**💭 تقدير الحساب (قبل الإيصال)**" : "**💰 تقسيم الحساب**",
-    mdTable(
-      ["الاسم", "الأصناف", "الأكل", ...split.feeLabels, "الإجمالي"],
-      split.people.flatMap((p) =>
-        perItemRows(
-          [p.coveredBy ? `${p.person} (على ${p.coveredBy})` : p.person],
-          itemsOf(p.person),
-          [money(p.items), ...p.fees.map(money), `**${money(p.total)}**`]
-        )
-      ),
-      2
-    ),
+    mdTable(["الاسم", "الصنف", "السعر", ...split.feeLabels, "الإجمالي"], rows, 2),
   ];
 
   const lines: string[] = [];
@@ -112,6 +120,7 @@ export function renderReply(reply: GarconReply): { text: string; blocks: Block[]
   if (reply.kind === "orders") parts.push(...ordersMd(reply));
   if (reply.kind === "split" || reply.kind === "estimate") parts.push(...splitMd(reply));
   if (reply.notes.length) parts.push(reply.notes.map((n) => `> ${n}`).join("\n"));
+  if (reply.outro) parts.push(reply.outro);
 
   const blocks: Block[] = [md(parts.join("\n\n"))];
   if (reply.kind !== "chat") {
