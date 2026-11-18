@@ -9,7 +9,8 @@ const qty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).repla
 // here (raw_number is rejected), and the first row is the header.
 function dataTable(caption: string, head: string[], rows: string[][]): Block {
   const cell = (text: string) => ({ type: "raw_text", text: text || "—" });
-  return { type: "data_table", caption, rows: [head.map(cell), ...rows.map((r) => r.map(cell))] };
+  // page_size defaults to 5, which would hide people behind a pager.
+  return { type: "data_table", caption, page_size: 100, rows: [head.map(cell), ...rows.map((r) => r.map(cell))] };
 }
 
 const md = (text: string): Block => ({ type: "markdown", text });
