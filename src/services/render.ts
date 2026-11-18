@@ -4,21 +4,31 @@ type Block = Record<string, unknown>;
 
 const money = (n: number) => n.toFixed(2);
 const qty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, ""));
+const esc = (s: string) => s.replace(/\|/g, "\\|").replace(/\n/g, " ");
+const md = (text: string): Block => ({ type: "markdown", text });
 
-// Sortable, full-width table; Slack requires a caption and only plain-text cells
-// here (raw_number is rejected), and the first row is the header.
-function dataTable(caption: string, head: string[], rows: string[][]): Block {
-  const cell = (text: string) => ({ type: "raw_text", text: text || "—" });
-  // page_size defaults to 5, which would hide people behind a pager.
-  return { type: "data_table", caption, page_size: 100, rows: [head.map(cell), ...rows.map((r) => r.map(cell))] };
+// Markdown cells can't hold line breaks, so a person with several items gets one
+// row per item and their name and amounts only on the first row.
+function mdTable(head: string[], rows: string[][], numericFrom = head.length): string {
+  const align = head.map((_, i) => (i >= numericFrom ? "---:" : "---"));
+  return [
+    `| ${head.map(esc).join(" | ")} |`,
+    `| ${align.join(" | ")} |`,
+    ...rows.map((r) => `| ${r.map(esc).join(" | ")} |`),
+  ].join("\n");
 }
 
-const md = (text: string): Block => ({ type: "markdown", text });
+function perItemRows(first: string[], items: string[], rest: string[]): string[][] {
+  const blank = (n: number) => Array(n).fill("");
+  return (items.length ? items : [""]).map((item, i) =>
+    i === 0 ? [...first, item, ...rest] : [...blank(first.length), item, ...blank(rest.length)]
+  );
+}
 
 const itemLabel = (i: { item_ar: string; qty: number; notes_ar: string }) =>
   `${qty(i.qty)} × ${i.item_ar}${i.notes_ar ? ` (${i.notes_ar})` : ""}`;
 
-function orderBlocks(reply: GarconReply): Block[] {
+function ordersMd(reply: GarconReply): string[] {
   const people = reply.orders.filter((o) => o.items.length);
   if (!people.length) return [];
 
@@ -33,37 +43,39 @@ function orderBlocks(reply: GarconReply): Block[] {
   }
 
   return [
-    dataTable("📋 الطلبات", ["الاسم", "الطلب"], people.map((o) => [o.person, o.items.map(itemLabel).join("، ")])),
-    dataTable(
-      "🛵 الأوردر للمطعم",
+    "**📋 الطلبات**",
+    mdTable(["الاسم", "الطلب"], people.flatMap((o) => perItemRows([o.person], o.items.map(itemLabel), []))),
+    "**🛵 الأوردر للمطعم**",
+    mdTable(
       ["الصنف", "العدد", "ملاحظات"],
       [...totals].map(([name, t]) => [name, qty(t.qty), t.notes.join("، ")])
     ),
   ];
 }
 
-function splitBlocks(reply: GarconReply): Block[] {
+function splitMd(reply: GarconReply): string[] {
   const receipt = reply.receipt;
   if (!receipt || !receipt.lines.length) return [];
   const split = computeSplit(receipt);
   const estimate = reply.kind === "estimate";
 
   const itemsOf = (person: string) =>
-    receipt.lines
-      .flatMap((l) => l.shares.filter((s) => s.person === person).map((s) => `${qty(s.qty)} × ${l.item_ar}`))
-      .join("، ");
+    receipt.lines.flatMap((l) =>
+      l.shares.filter((s) => s.person === person).map((s) => `${qty(s.qty)} × ${l.item_ar}`)
+    );
 
-  const out: Block[] = [
-    dataTable(
-      estimate ? "💭 تقدير الحساب (قبل الإيصال)" : "💰 تقسيم الحساب",
+  const out = [
+    estimate ? "**💭 تقدير الحساب (قبل الإيصال)**" : "**💰 تقسيم الحساب**",
+    mdTable(
       ["الاسم", "الأصناف", "الأكل", ...split.feeLabels, "الإجمالي"],
-      split.people.map((p) => [
-        p.coveredBy ? `${p.person} (على ${p.coveredBy})` : p.person,
-        itemsOf(p.person),
-        money(p.items),
-        ...p.fees.map(money),
-        money(p.total),
-      ])
+      split.people.flatMap((p) =>
+        perItemRows(
+          [p.coveredBy ? `${p.person} (على ${p.coveredBy})` : p.person],
+          itemsOf(p.person),
+          [money(p.items), ...p.fees.map(money), `**${money(p.total)}**`]
+        )
+      ),
+      2
     ),
   ];
 
@@ -91,16 +103,17 @@ function splitBlocks(reply: GarconReply): Block[] {
       lines.push(`فرق تقريب ${money(split.roundingFix.amount)} اتضاف على ${split.roundingFix.person}.`);
     }
   }
-  out.push(md(lines.join("\n")));
+  out.push(lines.join("\n"));
   return out;
 }
 
 export function renderReply(reply: GarconReply): { text: string; blocks: Block[] } {
-  const blocks: Block[] = [md(reply.intro)];
-  if (reply.kind === "orders") blocks.push(...orderBlocks(reply));
-  if (reply.kind === "split" || reply.kind === "estimate") blocks.push(...splitBlocks(reply));
-  if (reply.notes.length) blocks.push(md(reply.notes.map((n) => `> ${n}`).join("\n")));
+  const parts = [reply.intro];
+  if (reply.kind === "orders") parts.push(...ordersMd(reply));
+  if (reply.kind === "split" || reply.kind === "estimate") parts.push(...splitMd(reply));
+  if (reply.notes.length) parts.push(reply.notes.map((n) => `> ${n}`).join("\n"));
 
+  const blocks: Block[] = [md(parts.join("\n\n"))];
   if (reply.kind !== "chat") {
     blocks.push({
       type: "context_actions",
